@@ -204,7 +204,6 @@ jobs:
         with:
           name: compile-log-${{ env.device_code }}
           path: |
-            openwrt/build_dir/**/*
             openwrt/logs/**/*
             openwrt/*.log
           if-no-files-found: ignore
