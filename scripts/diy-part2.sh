@@ -42,3 +42,8 @@ else
   echo "错误：$EEPROM_FILE 不存在，无法创建符号链接"
   exit 1
 fi
+
+# 修复依赖变更导致的问题 (OpenWrt 24.10 移除了 luci-app-ttyd 和 lua-cjson)
+sed -i 's/luci-app-ttyd/luci-app-terminal/g' package/mtk/applications/luci-app-turboacc-mtk/Makefile || true
+sed -i 's/+lua-cjson //g' package/mtk/applications/mtwifi-cfg/Makefile || true
+sed -i 's/+lua-cjson//g' package/mtk/applications/mtwifi-cfg/Makefile || true
