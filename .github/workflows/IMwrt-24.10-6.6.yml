@@ -196,7 +196,18 @@ jobs:
         run: |
           set -e
           cd openwrt
-          make -j$(nproc) V=s || make -j4 V=s || make -j1 V=s
+          export CCACHE_DIR=$HOME/.ccache
+          ccache -M 5G
+          ccache -z
+          
+          # 自动化计算：当前系统最大核心数 + 10（专为 GitHub 官方双核服务器优化）
+          THREADS=$(( $(nproc) + 10 ))
+          echo "检测到系统 CPU 核心数: $(nproc)"
+          echo "优化后的并发编译线程数: $THREADS"
+          
+          # 激进多线程编译，失败则降级为单线程排错
+          make -j$THREADS || make -j1 V=s
+          ccache -s
           echo "status=success" >> $GITHUB_OUTPUT
 
       - if: failure()
