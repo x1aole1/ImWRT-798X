@@ -44,7 +44,7 @@ else
 fi
 
 # 修复依赖变更导致的问题 (OpenWrt 24.10 移除了 luci-app-ttyd, lua-cjson, ebtables-legacy)
-sed -i 's/+luci-app-ttyd//g' package/mtk/applications/luci-app-turboacc-mtk/Makefile || true
+sed -i 's/+luci-app-ttyd //g' package/mtk/applications/luci-app-turboacc-mtk/Makefile || true
 sed -i 's/+lua-cjson //g' package/mtk/applications/mtwifi-cfg/Makefile || true
 sed -i 's/+lua-cjson//g' package/mtk/applications/mtwifi-cfg/Makefile || true
 sed -i 's/+ebtables-legacy-utils//g' package/mtk/applications/luci-app-eqos-mtk/Makefile || true
