@@ -37,4 +37,25 @@ define Device/cmcc_rax3000m-emmc
 	pad-rootfs | append-metadata
 endef
 TARGET_DEVICES += cmcc_rax3000m-emmc
+
+define Device/cmcc_xr30-emmc
+  DEVICE_VENDOR := CMCC
+  DEVICE_MODEL := XR30 EMMC
+  DEVICE_VARIANT := (U-Boot mod)
+  DEVICE_DTS := mt7981b-cmcc-rax3000m-emmc-mtk
+  DEVICE_DTS_DIR := ../dts
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware kmod-usb3 \
+	automount f2fsck mkf2fs
+  SUPPORTED_DEVICES += cmcc,xr30-emmc
+  KERNEL_LOADADDR := 0x44000000
+  KERNEL := kernel-bin | gzip
+  KERNEL_INITRAMFS := kernel-bin | lzma | \
+	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
+  KERNEL_INITRAMFS_SUFFIX := -recovery.itb
+  IMAGES := sysupgrade.itb
+  IMAGE/sysupgrade.itb := append-kernel | \
+	fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-static-with-rootfs | \
+	pad-rootfs | append-metadata
+endef
+TARGET_DEVICES += cmcc_xr30-emmc
 EOF
