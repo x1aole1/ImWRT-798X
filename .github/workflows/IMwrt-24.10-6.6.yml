@@ -183,6 +183,7 @@ jobs:
           # 调用独立 Python 脚本，避免 YAML inline 单引号转义问题
           if [ "${{ env.device_code }}" = "cmcc_rax3000m-emmc" ]; then
             python3 $GITHUB_WORKSPACE/scripts/inject-emmc-device.py
+            rm -rf tmp
           fi
 
           make defconfig

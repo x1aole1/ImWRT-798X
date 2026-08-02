@@ -61,6 +61,10 @@ with open(FILOGIC, "r") as f:
 
 if MARKER in verify:
     print("SUCCESS: cmcc_rax3000m-emmc injected and verified in filogic.mk")
+    # 清理 target metadata 缓存，强制 make defconfig 重新解析 filogic.mk 包含新设备
+    if os.path.exists("tmp"):
+        shutil.rmtree("tmp")
+        print("Cleared openwrt/tmp metadata cache for re-parsing")
 else:
     print("ERROR: injection failed!", file=sys.stderr)
     sys.exit(1)
