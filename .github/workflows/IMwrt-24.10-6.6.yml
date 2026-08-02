@@ -1,5 +1,9 @@
 name: ImmortalWrt-24.10-6.6固件构建
 
+permissions:
+  contents: write
+  actions: write
+
 on:
   repository_dispatch:
     types: [build_firmware]

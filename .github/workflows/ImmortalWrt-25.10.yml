@@ -1,5 +1,9 @@
 name: ImmortalWrt-25.10 (Speed Optimized)
 
+permissions:
+  contents: write
+  actions: write
+
 on:
   workflow_dispatch:
     inputs:
