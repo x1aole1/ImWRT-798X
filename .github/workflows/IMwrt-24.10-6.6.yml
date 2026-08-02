@@ -180,54 +180,9 @@ jobs:
           $GITHUB_WORKSPACE/$DIY_P2_SH
 
           # 注入 cmcc_rax3000m-emmc (U-Boot mod，输出 sysupgrade.itb)
-          # 直接写在 YAML run 块内，彻底规避 .sh 文件 CRLF 换行污染问题
+          # 调用独立 Python 脚本，避免 YAML inline 单引号转义问题
           if [ "${{ env.device_code }}" = "cmcc_rax3000m-emmc" ]; then
-            python3 - << 'PYEOF'
-import sys
-FILOGIC = 'target/linux/mediatek/image/filogic.mk'
-MARKER = 'Device/cmcc_rax3000m-emmc'
-with open(FILOGIC, 'r') as f:
-    content = f.read()
-if MARKER in content:
-    print('cmcc_rax3000m-emmc already defined, skipping injection')
-    sys.exit(0)
-BS = '\\'
-TAB = '\t'
-lines = [
-    '',
-    'define Device/cmcc_rax3000m-emmc',
-    '  DEVICE_VENDOR := CMCC',
-    '  DEVICE_MODEL := RAX3000M EMMC',
-    '  DEVICE_VARIANT := (U-Boot mod)',
-    '  DEVICE_DTS := mt7981b-cmcc-rax3000m-emmc-mtk',
-    '  DEVICE_DTS_DIR := ../dts',
-    '  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware kmod-usb3 ' + BS,
-    TAB + 'automount f2fsck mkf2fs',
-    '  SUPPORTED_DEVICES += cmcc,rax3000m-emmc',
-    '  KERNEL_LOADADDR := 0x44000000',
-    '  KERNEL := kernel-bin | gzip',
-    '  KERNEL_INITRAMFS := kernel-bin | lzma | ' + BS,
-    TAB + 'fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k',
-    '  KERNEL_INITRAMFS_SUFFIX := -recovery.itb',
-    '  IMAGES := sysupgrade.itb',
-    '  IMAGE/sysupgrade.itb := append-kernel | ' + BS,
-    TAB + 'fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-static-with-rootfs | ' + BS,
-    TAB + 'pad-rootfs | append-metadata',
-    'endef',
-    'TARGET_DEVICES += cmcc_rax3000m-emmc',
-    '',
-]
-device_def = '\n'.join(lines)
-with open(FILOGIC, 'a') as f:
-    f.write(device_def)
-with open(FILOGIC, 'r') as f:
-    verify = f.read()
-if MARKER in verify:
-    print('SUCCESS: cmcc_rax3000m-emmc injected and verified in filogic.mk')
-else:
-    print('ERROR: injection failed!', file=sys.stderr)
-    sys.exit(1)
-PYEOF
+            python3 $GITHUB_WORKSPACE/scripts/inject-emmc-device.py
           fi
 
           make defconfig
