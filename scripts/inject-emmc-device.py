@@ -8,7 +8,8 @@ import sys
 import os
 
 FILOGIC = "target/linux/mediatek/image/filogic.mk"
-MARKER = "Device/cmcc_rax3000m-emmc"
+# 精确匹配行首，避免匹配到 cmcc_rax3000m-emmc-mtk 子串
+MARKER = "define Device/cmcc_rax3000m-emmc\n"
 
 if not os.path.exists(FILOGIC):
     print(f"ERROR: {FILOGIC} not found!", file=sys.stderr)
