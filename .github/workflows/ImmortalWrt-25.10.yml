@@ -175,10 +175,12 @@ jobs:
       - name: 发布至 GitHub Release
         uses: softprops/action-gh-release@v2
         if: steps.organize.outputs.status == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: Latest-Build-${{ github.event.inputs.device_model }}
           files: ${{ env.FIRMWARE_PATH }}/*
-          overwrite_files: true
+          overwrite: true
           body: |
             ## ImmortalWrt-25.10 自动编译
             - **设备型号**: ${{ github.event.inputs.device_model }}
