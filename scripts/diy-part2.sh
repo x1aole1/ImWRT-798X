@@ -51,26 +51,26 @@ sed -i 's/+ebtables-legacy-utils//g' package/mtk/applications/luci-app-eqos-mtk/
 sed -i 's/+ebtables-legacy//g' package/mtk/applications/luci-app-eqos-mtk/Makefile || true
 
 # 添加 cmcc_rax3000m-emmc (U-Boot mod 布局，生成 sysupgrade.itb 固件)
-cat << 'EOF' >> target/linux/mediatek/image/filogic.mk
-
-define Device/cmcc_rax3000m-emmc
-  DEVICE_VENDOR := CMCC
-  DEVICE_MODEL := RAX3000M EMMC
-  DEVICE_VARIANT := (U-Boot mod)
-  DEVICE_DTS := mt7981b-cmcc-rax3000m-emmc-mtk
-  DEVICE_DTS_DIR := ../dts
-  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware kmod-usb3 \
-	automount f2fsck mkf2fs
-  SUPPORTED_DEVICES += cmcc,rax3000m-emmc
-  KERNEL_LOADADDR := 0x44000000
-  KERNEL := kernel-bin | gzip
-  KERNEL_INITRAMFS := kernel-bin | lzma | \
-	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
-  KERNEL_INITRAMFS_SUFFIX := -recovery.itb
-  IMAGES := sysupgrade.itb
-  IMAGE/sysupgrade.itb := append-kernel | \
-	fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-static-with-rootfs | \
-	pad-rootfs | append-metadata
-endef
-TARGET_DEVICES += cmcc_rax3000m-emmc
-EOF
+# 使用 printf 逐行写入，避免 CRLF 换行符污染 Makefile
+FILOGIC_MK="target/linux/mediatek/image/filogic.mk"
+printf '\ndefine Device/cmcc_rax3000m-emmc\n' >> "$FILOGIC_MK"
+printf '  DEVICE_VENDOR := CMCC\n' >> "$FILOGIC_MK"
+printf '  DEVICE_MODEL := RAX3000M EMMC\n' >> "$FILOGIC_MK"
+printf '  DEVICE_VARIANT := (U-Boot mod)\n' >> "$FILOGIC_MK"
+printf '  DEVICE_DTS := mt7981b-cmcc-rax3000m-emmc-mtk\n' >> "$FILOGIC_MK"
+printf '  DEVICE_DTS_DIR := ../dts\n' >> "$FILOGIC_MK"
+printf '  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware kmod-usb3 \\\n' >> "$FILOGIC_MK"
+printf '\tautomount f2fsck mkf2fs\n' >> "$FILOGIC_MK"
+printf '  SUPPORTED_DEVICES += cmcc,rax3000m-emmc\n' >> "$FILOGIC_MK"
+printf '  KERNEL_LOADADDR := 0x44000000\n' >> "$FILOGIC_MK"
+printf '  KERNEL := kernel-bin | gzip\n' >> "$FILOGIC_MK"
+printf '  KERNEL_INITRAMFS := kernel-bin | lzma | \\\n' >> "$FILOGIC_MK"
+printf '\tfit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k\n' >> "$FILOGIC_MK"
+printf '  KERNEL_INITRAMFS_SUFFIX := -recovery.itb\n' >> "$FILOGIC_MK"
+printf '  IMAGES := sysupgrade.itb\n' >> "$FILOGIC_MK"
+printf '  IMAGE/sysupgrade.itb := append-kernel | \\\n' >> "$FILOGIC_MK"
+printf '\tfit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-static-with-rootfs | \\\n' >> "$FILOGIC_MK"
+printf '\tpad-rootfs | append-metadata\n' >> "$FILOGIC_MK"
+printf 'endef\n' >> "$FILOGIC_MK"
+printf 'TARGET_DEVICES += cmcc_rax3000m-emmc\n' >> "$FILOGIC_MK"
+echo "已注入 cmcc_rax3000m-emmc 设备定义（U-Boot mod .itb）"
