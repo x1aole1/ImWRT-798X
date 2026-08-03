@@ -1,0 +1,36 @@
+Run set -e
+  set -e
+  cd openwrt/bin/targets/*/*
+  rm -rf packages
+  for file in *sysupgrade* *factory*; do
+    [ -f "$file" ] && ! echo "$file" | grep -q "-bl2" && {
+      TYPE=$(echo "$file" | grep -o "sysupgrade\|factory")
+      EXT="${file##*.}"
+      mv "$file" "cmcc_rax3000m-emmc_25dB-on_commit-ec9ef10_${TYPE}.${EXT}"
+    }
+  done
+  echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+  echo "status=success" >> $GITHUB_OUTPUT
+  shell: /usr/bin/bash -e {0}
+  env:
+    REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-24.10
+    REPO_BRANCH: openwrt-24.10-6.6
+    FEEDS_CONF: feeds.conf.default
+    CONFIG_FILE: 24.10-6.6.config
+    DIY_P1_SH: scripts/diy-part1.sh
+    DIY_P2_SH: scripts/diy-part2.sh
+    DEVICE_CODE: cmcc_rax3000m-emmc
+    UPLOAD_FIRMWARE: true
+    UPLOAD_RELEASE: true
+    TZ: Asia/Shanghai
+    WEBDAV_URL: 
+    WEBDAV_USERNAME: 
+    WEBDAV_PASSWORD: 
+    ENABLE_5G_25DB: true
+    export PATH: /usr/lib/ccache:$PATH
+    export CCACHE_DIR: $HOME/.ccache
+    FIRMWARE_VERSION: commit-ec9ef10
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
