@@ -104,8 +104,11 @@ jobs:
 
           # 注入 cmcc_rax3000m-emmc (U-Boot mod，输出 sysupgrade.itb)
           python3 $GITHUB_WORKSPACE/scripts/inject-emmc-device.py
+          grep -A3 "^define Device/cmcc_rax3000m-emmc$" target/linux/mediatek/image/filogic.mk || { echo "ERROR: 设备定义注入失败"; exit 1; }
 
           make defconfig
+          grep -q "^CONFIG_TARGET_mediatek_filogic_DEVICE_cmcc_rax3000m-emmc=y" .config || { echo "ERROR: 注入的设备定义未被 Kconfig 解析，请检查 filogic.mk"; exit 1; }
+          grep -c "DEVICE_cmcc_rax3000m-emmc" .config
           make download -j8 || make download -j1 V=s
 
       - name: 修改5G 25dB
@@ -162,14 +165,19 @@ jobs:
         run: |
           set -e
           cd openwrt/bin/targets/*/*
+          ls -la
           rm -rf packages
-          for file in *sysupgrade* *factory*; do
-            [ -f "$file" ] && ! echo "$file" | grep -q "-bl2" && {
+          # 只收集 cmcc_rax3000m-emmc (U-Boot mod) 的产物，避免混入 emmc-mtk 的 sysupgrade.bin
+          FOUND=0
+          for file in *cmcc_rax3000m-emmc*sysupgrade* *cmcc_rax3000m-emmc*factory*; do
+            [ -f "$file" ] && ! echo "$file" | grep -q -- "-emmc-mtk" && {
               TYPE=$(echo "$file" | grep -o "sysupgrade\|factory")
               EXT="${file##*.}"
               mv "$file" "${{ env.DEVICE_CODE }}_25dB-on_${{ env.FIRMWARE_VERSION }}_${TYPE}.${EXT}"
+              FOUND=1
             }
           done
+          [ "$FOUND" -eq 1 ] || { echo "ERROR: 未找到 cmcc_rax3000m-emmc 固件产物 (sysupgrade.itb)"; exit 1; }
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
 
