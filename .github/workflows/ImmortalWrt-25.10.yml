@@ -1,4 +1,4 @@
-name: ImmortalWrt-25.10 (Speed Optimized)
+name: ImmortalWrt-25.12 (Speed Optimized)
 
 permissions:
   contents: write
@@ -54,7 +54,13 @@ jobs:
       - name: 克隆源码
         working-directory: /workdir
         run: |
-          git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+          rm -rf openwrt || true
+          for i in {1..3}; do
+            git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt && break
+            echo "克隆失败，重试 $i/3"
+            rm -rf openwrt
+            sleep 5
+          done
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
       - name: 缓存加速
@@ -65,9 +71,9 @@ jobs:
             /workdir/openwrt/dl
             /workdir/openwrt/staging_dir/host*
             /workdir/openwrt/staging_dir/toolchain*
-          key: ${{ runner.os }}-openwrt-${{ github.event.inputs.device_model }}-${{ hashFiles('openwrt/include/**') }}
+          key: ${{ runner.os }}-openwrt-2510-${{ github.event.inputs.device_model }}
           restore-keys: |
-            ${{ runner.os }}-openwrt-${{ github.event.inputs.device_model }}-
+            ${{ runner.os }}-openwrt-2510-${{ github.event.inputs.device_model }}-
 
       - name: 更新 Feeds & 执行 DIY 脚本
         run: |
@@ -81,14 +87,14 @@ jobs:
         run: |
           cd openwrt
           [ -f "$GITHUB_WORKSPACE/$CONFIG_FILE" ] && cp "$GITHUB_WORKSPACE/$CONFIG_FILE" .config
-          
+
           # 清理旧设备配置
           sed -i '/CONFIG_TARGET_mediatek_filogic_DEVICE_/d' .config || true
-          
+
           # 启用当前设备
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_${{ github.event.inputs.device_model }}=y" >> .config
           echo "CONFIG_CCACHE=y" >> .config
-          
+
           make defconfig
           make download -j12 || make download -j1 V=s
 
@@ -98,15 +104,24 @@ jobs:
           export CCACHE_DIR=$HOME/.ccache
           ccache -M 3G
           ccache -z
-          
-          # 自动化计算：当前系统最大核心数 + 10
+
           THREADS=$(( $(nproc) + 10 ))
           echo "检测到系统 CPU 核心数: $(nproc)"
           echo "根据方案 2 优化后的编译线程数: $THREADS"
-          
+
           # 使用计算出的线程数编译，失败时降级为单线程输出排错日志
           make -j$THREADS || make -j1 V=s
           ccache -s
+
+      - name: 上传编译日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compile-log-2510-${{ github.event.inputs.device_model }}
+          path: |
+            openwrt/logs/**/*
+            openwrt/*.log
+          if-no-files-found: ignore
 
       - name: 收集与整理固件
         id: organize
@@ -114,26 +129,26 @@ jobs:
         run: |
           cd openwrt/bin/targets/*/*
           rm -rf packages 2>/dev/null || true
-          
+
           DATE_DISPLAY=$(date +'%Y%m%d %H:%M')
           DATE_FILE=$(date +'%Y%m%d_%H%M')
-          
+
           echo "DATE=$DATE_DISPLAY" >> $GITHUB_ENV
           echo "FIRMWARE_VERSION=$(date +%Y%m%d)" >> $GITHUB_ENV
           echo "device_code=${{ github.event.inputs.device_model }}" >> $GITHUB_ENV
-          
+
           # 只保留 sysupgrade 文件，并精简名称
           for file in *; do
             [ -f "$file" ] && ! echo "$file" | grep -qE '-(bl2|recovery|sha256sums)' && [[ $file == *sysupgrade* ]] && {
               EXT="${file##*.}"
               NEW_NAME="${{ github.event.inputs.device_model }}_${DATE_FILE}_sysupgrade.${EXT}"
               mv "$file" "$NEW_NAME"
-              echo "✅ 固件就绪: $NEW_NAME"
+              echo "固件就绪: $NEW_NAME"
             }
           done
-          
+
           rm -f *factory* *recovery* *-bl2* *sha256sums* 2>/dev/null || true
-          
+
           echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
 
@@ -142,7 +157,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const tag = `Latest-Build-${{ github.event.inputs.device_model }}`;
+            const tag = `Latest-2510-${{ github.event.inputs.device_model }}`;
             try {
               const release = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
@@ -156,7 +171,7 @@ jobs:
                   asset_id: asset.id
                 });
               }
-              console.log(`✅ 已删除 ${release.data.assets.length} 个旧固件`);
+              console.log(`已删除 ${release.data.assets.length} 个旧固件`);
             } catch (e) {
               console.log("第一次发布或无旧文件，跳过删除");
             }
@@ -178,11 +193,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: Latest-Build-${{ github.event.inputs.device_model }}
+          tag_name: Latest-2510-${{ github.event.inputs.device_model }}
           files: ${{ env.FIRMWARE_PATH }}/*
           overwrite: true
           body: |
-            ## ImmortalWrt-25.10 自动编译
+            ## ImmortalWrt-25.12 自动编译
             - **设备型号**: ${{ github.event.inputs.device_model }}
             - **编译时间**: ${{ env.DATE }}
             - **分支**: ${{ env.REPO_BRANCH }}

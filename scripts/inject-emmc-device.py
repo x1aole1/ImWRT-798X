@@ -6,6 +6,7 @@
 """
 import sys
 import os
+import shutil
 
 FILOGIC = "target/linux/mediatek/image/filogic.mk"
 # 精确匹配行首，避免匹配到 cmcc_rax3000m-emmc-mtk 子串

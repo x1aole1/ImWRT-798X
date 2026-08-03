@@ -1,4 +1,4 @@
-name: pc
+name: ImmortalWrt-25.12 固件构建（自托管）
 
 permissions:
   contents: write
@@ -48,7 +48,7 @@ jobs:
             gcc-multilib g++-multilib gettext git \
             libncurses5-dev libssl-dev python3-setuptools \
             rsync swig unzip zlib1g-dev file wget curl ccache
-          
+
           # 使用当前工作区作为编译目录，避免污染宿主机根目录
           mkdir -p openwrt-build-dir
 
@@ -56,7 +56,15 @@ jobs:
         run: |
           # 清理上一次残留的旧源码（由于自托管不会自动销毁容器，需手动清理）
           rm -rf openwrt-build-dir/openwrt || true
-          git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt-build-dir/openwrt
+          for i in {1..3}; do
+            git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt-build-dir/openwrt && break
+            echo "克隆失败，重试 $i/3"
+            rm -rf openwrt-build-dir/openwrt
+            sleep 5
+          done
+          # dl 目录持久化在 runner 家目录（跨构建复用，避免每次全量重新下载）
+          mkdir -p ~/.openwrt_dl
+          ln -sfn ~/.openwrt_dl openwrt-build-dir/openwrt/dl
           ln -sfn $PWD/openwrt-build-dir/openwrt $GITHUB_WORKSPACE/openwrt
 
       # 核心修改 3：移除了 actions/cache 步骤。
@@ -74,14 +82,14 @@ jobs:
         run: |
           cd openwrt
           [ -f "$GITHUB_WORKSPACE/$CONFIG_FILE" ] && cp -f "$GITHUB_WORKSPACE/$CONFIG_FILE" .config
-          
+
           # 清理旧设备配置
           sed -i '/CONFIG_TARGET_mediatek_filogic_DEVICE_/d' .config || true
-          
+
           # 启用当前设备
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_${{ github.event.inputs.device_model }}=y" >> .config
           echo "CONFIG_CCACHE=y" >> .config
-          
+
           make defconfig
           # 宿主机带宽好、性能强时，download 阶段可直接用多线程
           make download -j$(nproc) || make download -j1 V=s
@@ -89,13 +97,13 @@ jobs:
       - name: 编译固件
         run: |
           cd openwrt
-          
+
           # 核心修改 4：将 ccache 缓存目录指向宿主机持久化目录，确保跨 Workflow 复用
           export CCACHE_DIR="$HOME/.ccache_openwrt"
           mkdir -p $CCACHE_DIR
           ccache -M 20G
           ccache -z
-          
+
           # 核心修改 5：优化 64 核超高线程编译策略
           # OpenWrt 编译在超高线程（>32）下极易因时序错乱死锁，限制初次编译最大使用 32 线程。
           CPU_CORES=$(nproc)
@@ -104,12 +112,22 @@ jobs:
           else
             THREADS=$CPU_CORES
           fi
-          
+
           echo "检测到系统实际 CPU 核心数: $CPU_CORES"
           echo "为防止编译死锁，控制最大并行线程数为: $THREADS"
-          
+
           make -j$THREADS || make -j1 V=s
           ccache -s
+
+      - name: 上传编译日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compile-log-776-${{ github.event.inputs.device_model }}
+          path: |
+            openwrt/logs/**/*
+            openwrt/*.log
+          if-no-files-found: ignore
 
       - name: 收集与整理固件
         id: organize
@@ -117,26 +135,26 @@ jobs:
         run: |
           cd openwrt/bin/targets/*/*
           rm -rf packages 2>/dev/null || true
-          
+
           DATE_DISPLAY=$(date +'%Y%m%d %H:%M')
           DATE_FILE=$(date +'%Y%m%d_%H%M')
-          
+
           echo "DATE=$DATE_DISPLAY" >> $GITHUB_ENV
           echo "FIRMWARE_VERSION=$(date +%Y%m%d)" >> $GITHUB_ENV
           echo "device_code=${{ github.event.inputs.device_model }}" >> $GITHUB_ENV
-          
+
           # 只保留 sysupgrade 文件，并精简名称
           for file in *; do
             [ -f "$file" ] && ! echo "$file" | grep -qE '-(bl2|recovery|sha256sums)' && [[ $file == *sysupgrade* ]] && {
               EXT="${file##*.}"
               NEW_NAME="${{ github.event.inputs.device_model }}_${DATE_FILE}_sysupgrade.${EXT}"
               mv "$file" "$NEW_NAME"
-              echo "✅ 固件就绪: $NEW_NAME"
+              echo "固件就绪: $NEW_NAME"
             }
           done
-          
+
           rm -f *factory* *recovery* *-bl2* *sha256sums* 2>/dev/null || true
-          
+
           echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
 
@@ -145,7 +163,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const tag = `Latest-Build-${{ github.event.inputs.device_model }}`;
+            const tag = `Latest-776-${{ github.event.inputs.device_model }}`;
             try {
               const release = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
@@ -159,7 +177,7 @@ jobs:
                   asset_id: asset.id
                 });
               }
-              console.log(`✅ 已删除 ${release.data.assets.length} 个旧固件`);
+              console.log(`已删除 ${release.data.assets.length} 个旧固件`);
             } catch (e) {
               console.log("第一次发布或无旧文件，跳过删除");
             }
@@ -181,7 +199,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: Latest-Build-${{ github.event.inputs.device_model }}
+          tag_name: Latest-776-${{ github.event.inputs.device_model }}
           files: ${{ env.FIRMWARE_PATH }}/*
           overwrite: true
           body: |
