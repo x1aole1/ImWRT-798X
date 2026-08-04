@@ -118,8 +118,40 @@ jobs:
           python3 $GITHUB_WORKSPACE/scripts/inject-emmc-device.py
           grep -A3 "^define Device/cmcc_rax3000m-emmc$" target/linux/mediatek/image/filogic.mk || { echo "ERROR: 设备定义注入失败"; exit 1; }
 
-          make defconfig
-          grep -q "^CONFIG_TARGET_mediatek_filogic_DEVICE_cmcc_rax3000m-emmc=y" .config || { echo "ERROR: 注入的设备定义未被 Kconfig 解析，请检查 filogic.mk"; exit 1; }
+          # 诊断版 defconfig：失败不退出，收集完整诊断信息
+          set +e
+          make defconfig > defconfig.log 2>&1
+          echo "=== defconfig exit code: $?"
+          echo "=== defconfig 输出尾部:"
+          tail -40 defconfig.log
+          echo "=== 1. tmp/.targetinfo 注入设备行数:"
+          grep -n "cmcc_rax3000m-emmc" tmp/.targetinfo || echo "(targetinfo 无此设备)"
+          echo "=== 2. tmp/.config-target.in 注入设备上下文:"
+          grep -n -B2 -A3 "DEVICE_cmcc_rax3000m-emmc" tmp/.config-target.in | head -40 || echo "(Kconfig 无此设备)"
+          echo "=== 3. .config 设备行:"
+          grep -n "cmcc_rax3000m-emmc" .config || echo "(.config 无此设备)"
+          echo "=== 4. .config 目标相关状态:"
+          grep -n "^CONFIG_TARGET_mediatek\b\|^# CONFIG_TARGET_mediatek\b\|^CONFIG_TARGET_mediatek_filogic\b\|^# CONFIG_TARGET_mediatek_filogic\b\|CONFIG_TARGET_MULTI_PROFILE" .config
+          echo "=== 5. defconfig 中的 unknown/nonexistent 警告:"
+          grep -i "nonexistent\|unknown symbol" defconfig.log
+          echo "=== 6. 注入设备定义位置:"
+          grep -n "define Device/cmcc_rax3000m-emmc" target/linux/mediatek/image/filogic.mk
+          wc -l target/linux/mediatek/image/filogic.mk
+          if grep -q "^CONFIG_TARGET_mediatek_filogic_DEVICE_cmcc_rax3000m-emmc=y" .config; then
+            echo "RESULT: OK"
+          else
+            echo "RESULT: FAIL"
+          fi
+          set -e
+          cp defconfig.log $GITHUB_WORKSPACE/defconfig.log 2>/dev/null || true
+          cp tmp/.config-target.in $GITHUB_WORKSPACE/config-target.in 2>/dev/null || true
+          cp tmp/.targetinfo $GITHUB_WORKSPACE/targetinfo 2>/dev/null || true
+          cp .config $GITHUB_WORKSPACE/dot-config 2>/dev/null || true
+          if ! grep -q "^CONFIG_TARGET_mediatek_filogic_DEVICE_cmcc_rax3000m-emmc=y" .config; then
+            echo "KCONFIG_PARSE_FAILED=1" >> $GITHUB_ENV
+            echo "诊断信息已保存，请在 Actions 日志中查看"
+            exit 0
+          fi
           grep -c "DEVICE_cmcc_rax3000m-emmc" .config
           make download -j8 || make download -j1 V=s
 
@@ -135,6 +167,7 @@ jobs:
 
       - name: 编译固件
         id: compile
+        if: env.KCONFIG_PARSE_FAILED != '1'
         timeout-minutes: 180
         run: |
           set -e
@@ -158,6 +191,10 @@ jobs:
           path: |
             openwrt/logs/**/*
             openwrt/*.log
+            defconfig.log
+            config-target.in
+            targetinfo
+            dot-config
           if-no-files-found: ignore
 
       - name: 提取版本号
