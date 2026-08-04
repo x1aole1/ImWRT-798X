@@ -1,16 +1,23 @@
-Run set -e
-  set -e
-  cd openwrt/bin/targets/*/*
-  rm -rf packages
-  for file in *sysupgrade* *factory*; do
-    [ -f "$file" ] && ! echo "$file" | grep -q "-bl2" && {
-      TYPE=$(echo "$file" | grep -o "sysupgrade\|factory")
-      EXT="${file##*.}"
-      mv "$file" "cmcc_rax3000m-emmc_25dB-on_commit-ec9ef10_${TYPE}.${EXT}"
-    }
-  done
-  echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-  echo "status=success" >> $GITHUB_OUTPUT
+0s
+Run [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+  [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+  [ -e files ] && mv files openwrt/files
+  [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+  echo "CONFIG_TARGET_mediatek_filogic_DEVICE_cmcc_rax3000m-emmc=y" >> openwrt/.config
+  cd openwrt
+  chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH $GITHUB_WORKSPACE/$DIY_P2_SH
+  $GITHUB_WORKSPACE/$DIY_P1_SH
+  ./scripts/feeds update -a && ./scripts/feeds install -a
+  $GITHUB_WORKSPACE/$DIY_P2_SH
+  
+  # 注入 cmcc_rax3000m-emmc (U-Boot mod，输出 sysupgrade.itb)
+  python3 $GITHUB_WORKSPACE/scripts/inject-emmc-device.py
+  grep -A3 "^define Device/cmcc_rax3000m-emmc$" target/linux/mediatek/image/filogic.mk || { echo "ERROR: 设备定义注入失败"; exit 1; }
+  
+  make defconfig
+  grep -q "^CONFIG_TARGET_mediatek_filogic_DEVICE_cmcc_rax3000m-emmc=y" .config || { echo "ERROR: 注入的设备定义未被 Kconfig 解析，请检查 filogic.mk"; exit 1; }
+  grep -c "DEVICE_cmcc_rax3000m-emmc" .config
+  make download -j8 || make download -j1 V=s
   shell: /usr/bin/bash -e {0}
   env:
     REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-24.10
@@ -29,8 +36,8 @@ Run set -e
     ENABLE_5G_25DB: true
     export PATH: /usr/lib/ccache:$PATH
     export CCACHE_DIR: $HOME/.ccache
-    FIRMWARE_VERSION: commit-ec9ef10
-Usage: grep [OPTION]... PATTERNS [FILE]...
-Try 'grep --help' for more information.
-Usage: grep [OPTION]... PATTERNS [FILE]...
-Try 'grep --help' for more information.
+/home/runner/work/_temp/7f936efa-1eac-4649-a5f6-4fd327855097.sh: line 8: ./scripts/feeds: No such file or directory
+警告：package/base-files/files/bin/config_generate 不存在，跳过 IP 修改
+已删除 e2p（无论是否存在）
+错误：package/mtk/drivers/mt_wifi/files/mt7981-default-eeprom/MT7981_iPAiLNA_EEPROM.bin 不存在，无法创建符号链接
+Error: Process completed with exit code 1.
