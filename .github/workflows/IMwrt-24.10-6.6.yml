@@ -82,16 +82,28 @@ jobs:
       - name: 克隆或更新源代码
         working-directory: /workdir
         run: |
-          if [ -d "openwrt" ]; then
+          # 缓存只恢复 dl/staging_dir，/workdir/openwrt 可能是残缺目录，
+          # 必须用 .git 判断是否是真源码树，残缺则清空重来
+          if [ -d "openwrt/.git" ]; then
             cd openwrt && git fetch origin $REPO_BRANCH && git reset --hard origin/$REPO_BRANCH
           else
-            for i in {1..3}; do git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt && break || { echo "克隆失败，重试 $i/3"; sleep 5; }; done
+            rm -rf openwrt
+            for i in {1..3}; do
+              git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt && break
+              echo "克隆失败，重试 $i/3"
+              rm -rf openwrt
+              sleep 5
+            done
           fi
+          [ -f openwrt/scripts/feeds ] || { echo "ERROR: openwrt 源码不完整 (scripts/feeds 缺失)"; exit 1; }
+          echo "openwrt 源码就绪: $(git -C openwrt rev-parse --short HEAD)"
           rm -rf $GITHUB_WORKSPACE/openwrt
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+          ls $GITHUB_WORKSPACE/openwrt/scripts/feeds && echo "符号链接验证通过"
 
       - name: 准备Feeds和配置
         run: |
+          echo "cwd=$(pwd)"; echo "openwrt -> $(readlink -f openwrt)"; ls openwrt/scripts/feeds
           [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
           [ -e files ] && mv files openwrt/files
           [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
